@@ -13,7 +13,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -22,14 +21,12 @@ import java.util.List;
 @Service
 public class LinkService {
     private final LinkRepository linkRepository;
-    private final LinkMapper toLink;
     private final ClickEventRepository clickEventRepository;
     private final StringRedisTemplate redisTemplate;
     private final LinkStatusService linkStatusService;
 
-    public LinkService(LinkRepository linkRepository, LinkMapper toLink, ClickEventRepository clickEventRepository, StringRedisTemplate redisTemplate, LinkStatusService linkStatusService) {
+    public LinkService(LinkRepository linkRepository, ClickEventRepository clickEventRepository, StringRedisTemplate redisTemplate, LinkStatusService linkStatusService) {
         this.linkRepository=linkRepository;
-        this.toLink=toLink;
         this.clickEventRepository=clickEventRepository;
         this.redisTemplate=redisTemplate;
         this.linkStatusService=linkStatusService;
@@ -120,31 +117,46 @@ public class LinkService {
     }
 
     @Transactional
-    public Link updateLinkUrl(Long id, String newUrl) {
+    public boolean updateLinkUrl(Long id, String newUrl) {
         Link link= linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exists."));
+        String key= "link:"+link.getShortCode();
         link.setOriginalUrl(newUrl);
-        return link;
+        redisTemplate.opsForValue().set(key,newUrl);
+        if(link.getOriginalUrl()==newUrl)
+            return true;
+        else
+            return false;
     }
 
     @Transactional
-    public Link updateLinkExpiry(Long id, LocalDateTime expiresAt) {
+    public boolean updateLinkExpiry(Long id, LocalDateTime expiresAt) {
         Link link=linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exists."));
         link.setExpiresAt(expiresAt);
-        return link;
+        if(link.getExpiresAt()==expiresAt)
+            return true;
+        else
+            return false;
     }
 
     @Transactional
-    public Link updateLinkStatus(Long id, LinkStatus status) {
+    public boolean updateLinkStatus(Long id, LinkStatus status) {
         Link link=linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exists."));
         link.setStatus(status);
-        return link;
+        if(link.getStatus()==status)
+            return true;
+        else
+            return false;
     }
 
     @Transactional
-    public void deleteLink(Long id) {
-        if(!linkRepository.existsById(id)) {
-            throw new RuntimeException("Link does not exist.");
-        }
+    public boolean deleteLink(Long id) {
+        Link link=linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exist."));
+        String key="link:"+link.getShortCode();
+        redisTemplate.delete(key);
         linkRepository.deleteById(id);
+        if(linkRepository.existsById(id))
+            return false;
+        else
+            return true;
     }
 }
