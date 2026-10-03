@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 public class LinkUpdateRequestDTO {
 
     @URL
-    private String originalUrl;
-    private LocalDateTime expiresAt;
+    private String originalUrl=null;
+    private LocalDateTime expiresAt=null;
 
     public String getOriginalUrl() {
         return originalUrl;

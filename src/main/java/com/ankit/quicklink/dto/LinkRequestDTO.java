@@ -12,10 +12,11 @@ public class LinkRequestDTO {
     @URL @NotBlank
     private String originalUrl;
     @Nullable
-    private LocalDateTime expiresAt;
+    private LocalDateTime expiresAt=null;
     @Nullable
-    @Positive
-    private Integer maxClick;
+    private boolean oneTime=false;
+    @Nullable @Positive
+    private Integer maxClick=null;
 
     public String getOriginalUrl() {
         return originalUrl;
@@ -23,6 +24,10 @@ public class LinkRequestDTO {
 
     public LocalDateTime getExpiresAt() {
         return expiresAt;
+    }
+
+    public boolean getOneTime() {
+        return oneTime;
     }
 
     public Integer getMaxClick() {
@@ -35,6 +40,10 @@ public class LinkRequestDTO {
 
     public void setExpiresAt(LocalDateTime expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public void setOneTime(boolean oneTime) {
+        this.oneTime = oneTime;
     }
 
     public void setMaxClick(Integer maxClick) {

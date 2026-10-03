@@ -10,6 +10,7 @@ public class ResponseMapper {
     //public static LinkResponseDTO toResponse(String originalUrl, String shortCode, LocalDateTime createdAt, LocalDateTime expiresAt, LinkStatus status, Integer count) {
     public LinkResponseDTO toResponse(Link link) {
         LinkResponseDTO responseDTO=new LinkResponseDTO();
+        responseDTO.setId(link.getId());
         responseDTO.setOriginalUrl(link.getOriginalUrl());
         responseDTO.setShortCode(link.getShortCode());
         responseDTO.setCreatedAt(link.getCreatedAt());

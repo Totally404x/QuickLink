@@ -47,7 +47,7 @@ public class LinkService {
     }
 
     @Transactional
-    public Link createLink(String originalUrl, LocalDateTime expiresAt, Integer maxClick) {
+    public Link createLink(String originalUrl, LocalDateTime expiresAt, Boolean oneTime, Integer maxClick) {
         if(expiresAt!=null && !expiresAt.isAfter(LocalDateTime.now().plusMinutes(5))) {
             throw new RuntimeException("Validity Period too short or already expired.");
         }
@@ -55,6 +55,8 @@ public class LinkService {
         do{
             shortCode=generateShortCode();
         }while(linkRepository.existsByShortCode(shortCode));
+        if(oneTime)
+            maxClick=1;
         return linkRepository.save(LinkMapper.toLink(originalUrl,shortCode,expiresAt,maxClick));
     }
 

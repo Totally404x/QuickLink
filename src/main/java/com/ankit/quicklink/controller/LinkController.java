@@ -28,9 +28,9 @@ public class LinkController {
 
     @PostMapping
     public ResponseEntity<String> createLink(@RequestBody LinkRequestDTO requestDTO) {
-        Link link= linkService.createLink(requestDTO.getOriginalUrl(), requestDTO.getExpiresAt(), requestDTO.getMaxClick());
+        Link link= linkService.createLink(requestDTO.getOriginalUrl(), requestDTO.getExpiresAt(), requestDTO.getOneTime(), requestDTO.getMaxClick());
         LinkResponseDTO responseDTO=responseMapper.toResponse(link);
-        return ResponseEntity.ok("Link created: \n"+responseDTO);
+        return ResponseEntity.ok("Link created: \n");
     }
 
     @GetMapping("/{shortCode}")
