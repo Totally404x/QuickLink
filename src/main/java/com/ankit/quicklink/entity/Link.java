@@ -22,7 +22,9 @@ public class Link {
     private String shortCode;
     @Column(nullable=false)
     private LocalDateTime createdAt;
+    private LocalDateTime scheduledAt;
     private LocalDateTime expiresAt;
+    private String passwordHash;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private LinkStatus status=LinkStatus.ACTIVE;
@@ -69,12 +71,28 @@ public class Link {
         this.createdAt = createdAt;
     }
 
+    public LocalDateTime getScheduledAt() {
+        return scheduledAt;
+    }
+
+    public void setScheduledAt(LocalDateTime scheduledAt) {
+        this.scheduledAt = scheduledAt;
+    }
+
     public LocalDateTime getExpiresAt() {
         return expiresAt;
     }
 
     public void setExpiresAt(LocalDateTime expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public Integer getClicks() {

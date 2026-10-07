@@ -12,7 +12,13 @@ public class LinkRequestDTO {
     @URL @NotBlank
     private String originalUrl;
     @Nullable
+    private String customAlias=null;
+    @Nullable
+    private LocalDateTime scheduledAt=null;
+    @Nullable
     private LocalDateTime expiresAt=null;
+    @Nullable
+    private String password=null;
     @Nullable
     private boolean oneTime=false;
     @Nullable @Positive
@@ -22,14 +28,32 @@ public class LinkRequestDTO {
         return originalUrl;
     }
 
+    @Nullable
+    public String getCustomAlias() {
+        return customAlias;
+    }
+
+    @Nullable
+    public LocalDateTime getScheduledAt() {
+        return scheduledAt;
+    }
+
+    @Nullable
     public LocalDateTime getExpiresAt() {
         return expiresAt;
     }
 
-    public boolean getOneTime() {
+    @Nullable
+    public String getPassword() {
+        return password;
+    }
+
+    @Nullable
+    public Boolean getOneTime() {
         return oneTime;
     }
 
+    @Nullable
     public Integer getMaxClick() {
         return maxClick;
     }
@@ -38,15 +62,27 @@ public class LinkRequestDTO {
         this.originalUrl = originalUrl;
     }
 
-    public void setExpiresAt(LocalDateTime expiresAt) {
+    public void setCustomAlias(@Nullable String customAlias) {
+        this.customAlias = customAlias;
+    }
+
+    public void setScheduledAt(@Nullable LocalDateTime scheduledAt) {
+        this.scheduledAt = scheduledAt;
+    }
+
+    public void setExpiresAt(@Nullable LocalDateTime expiresAt) {
         this.expiresAt = expiresAt;
     }
 
-    public void setOneTime(boolean oneTime) {
+    public void setPassword(@Nullable String password) {
+        this.password=password;
+    }
+
+    public void setOneTime(@Nullable Boolean oneTime) {
         this.oneTime = oneTime;
     }
 
-    public void setMaxClick(Integer maxClick) {
+    public void setMaxClick(@Nullable Integer maxClick) {
         this.maxClick = maxClick;
     }
 }

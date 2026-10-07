@@ -4,6 +4,7 @@ import com.ankit.quicklink.dto.LinkAnalyticsDTO;
 import com.ankit.quicklink.entity.ClickEvent;
 import com.ankit.quicklink.entity.Link;
 import com.ankit.quicklink.entity.LinkStatus;
+import com.ankit.quicklink.exception.*;
 import com.ankit.quicklink.mapper.LinkMapper;
 import com.ankit.quicklink.repository.ClickEventRepository;
 import com.ankit.quicklink.repository.DailyClickProjection;
@@ -12,6 +13,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -24,12 +26,14 @@ public class LinkService {
     private final ClickEventRepository clickEventRepository;
     private final StringRedisTemplate redisTemplate;
     private final LinkStatusService linkStatusService;
+    private final PasswordEncoder passwordEncoder;
 
-    public LinkService(LinkRepository linkRepository, ClickEventRepository clickEventRepository, StringRedisTemplate redisTemplate, LinkStatusService linkStatusService) {
+    public LinkService(LinkRepository linkRepository, ClickEventRepository clickEventRepository, StringRedisTemplate redisTemplate, LinkStatusService linkStatusService, PasswordEncoder passwordEncoder) {
         this.linkRepository=linkRepository;
         this.clickEventRepository=clickEventRepository;
         this.redisTemplate=redisTemplate;
         this.linkStatusService=linkStatusService;
+        this.passwordEncoder=passwordEncoder;
     }
 
     private String getRedisKey(String shortCode) {
@@ -46,36 +50,64 @@ public class LinkService {
         return code.toString();
     }
 
-    @Transactional
-    public Link createLink(String originalUrl, LocalDateTime expiresAt, Boolean oneTime, Integer maxClick) {
-        if(expiresAt!=null && !expiresAt.isAfter(LocalDateTime.now().plusMinutes(5))) {
-            throw new RuntimeException("Validity Period too short or already expired.");
+    private Boolean passwordChecker(Link link, String password) {
+        if(link.getPasswordHash()!=null) {
+            if(password!=null && !passwordEncoder.matches(password, link.getPasswordHash()))
+                return false;
         }
-        String shortCode;
-        do{
-            shortCode=generateShortCode();
-        }while(linkRepository.existsByShortCode(shortCode));
-        if(oneTime)
-            maxClick=1;
-        return linkRepository.save(LinkMapper.toLink(originalUrl,shortCode,expiresAt,maxClick));
+        return true;
     }
 
     @Transactional
-    public String getOriginalUrl(String shortCode) {
+    public Link createLink(String originalUrl, String customAlias, LocalDateTime scheduledAt, LocalDateTime expiresAt, String password, Boolean oneTime, Integer maxClick) {
+        if(password!=null) {
+            password=passwordEncoder.encode(password);
+        }
+        if(expiresAt!=null && !expiresAt.isAfter(LocalDateTime.now().plusMinutes(5))) {
+            throw new InvalidLinkException("Validity Period too short or already expired.");
+        }
+        if(scheduledAt!=null && scheduledAt.isBefore(LocalDateTime.now().minusSeconds(5))) {
+            throw new InvalidLinkException("Schedule must use a future date/time.");
+        }
+        String shortCode;
+        if(customAlias==null) {
+            do {
+                shortCode = generateShortCode();
+            } while (linkRepository.existsByShortCode(shortCode));
+        }
+        else {
+            if(linkRepository.existsByShortCode(customAlias))
+                throw new LinkAlreadyExistsException("This alias is already being used; Please choose another.");
+            shortCode=customAlias;
+        }
+        if(oneTime)
+            maxClick=1;
+        return linkRepository.save(LinkMapper.toLink(originalUrl,shortCode,scheduledAt,expiresAt,password, maxClick));
+    }
+
+    @Transactional
+    public String getOriginalUrl(String shortCode, String password) {
         String redisKey=getRedisKey(shortCode);
         String cachedURL=redisTemplate.opsForValue().get(redisKey);
-        Link link= linkRepository.findByShortCode(shortCode).orElseThrow(() -> new RuntimeException("Entered short code does not exist."));
+        Link link= linkRepository.findByShortCode(shortCode).orElseThrow(() -> new LinkNotFoundException("Entered short code does not exist."));
         String originalUrl=cachedURL!=null?cachedURL:link.getOriginalUrl();
+        if(!passwordChecker(link, password)) {
+            throw new InvalidPasswordException("Password does not match.");
+        }
         if(link.getStatus()==LinkStatus.DISABLED) {
-            throw new RuntimeException("Link has been disabled.");
+            throw new LinkDisabledException("Link has been disabled.");
+        }
+        if(link.getScheduledAt()!=null && link.getScheduledAt().isAfter(LocalDateTime.now())) {
+            linkStatusService.updateStatus(link,LinkStatus.YET_TO_BE_ACTIVATED);
+            throw new LinkNotActiveException("This link has been scheduled for activation at a later date or time.");
         }
         if(link.getExpiresAt()!=null && link.getExpiresAt().isBefore(LocalDateTime.now())) {
             linkStatusService.updateStatus(link,LinkStatus.EXPIRED);
-            throw new RuntimeException("Link has expired.");
+            throw new LinkExpiredException("Link has expired.");
         }
         if(link.getMaxClick()!=null && link.getClicks()>=link.getMaxClick()) {
             linkStatusService.updateStatus(link,LinkStatus.LIMIT_REACHED);
-            throw new RuntimeException("Maximum click limit has been reached for this link.");
+            throw new ClickLimitReachedException("Maximum click limit has been reached for this link.");
         }
 
         link.setClicks(link.getClicks()+1);
@@ -92,20 +124,20 @@ public class LinkService {
     }
 
     public Link getLinkById(Long id) {
-        return linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link was not found."));
+        return linkRepository.findById(id).orElseThrow(()-> new LinkNotFoundException("Link was not found."));
     }
 
     public Page<Link> getLinkByOriginalUrl(String originalUrl, Pageable pageable) {
         Page<Link> links= linkRepository.findByOriginalUrlContaining(originalUrl, pageable);
         if(links.isEmpty()) {
-            throw new RuntimeException("No Link exists by entered URL.");
+            throw new LinkNotFoundException("No Link exists by entered URL.");
         }
         return links;
     }
 
-    public LinkAnalyticsDTO getlinkAnalytics(Long id) {
+    public LinkAnalyticsDTO getLinkAnalytics(Long id) {
         if(!linkRepository.existsById(id)) {
-            throw new RuntimeException("Link does not exist.");
+            throw new LinkNotFoundException("Link does not exist.");
         }
         long totalClicks= clickEventRepository.countByLinkId(id);
         return new LinkAnalyticsDTO(id, totalClicks);
@@ -113,46 +145,37 @@ public class LinkService {
 
     public List<DailyClickProjection> getDailyClicks(Long id) {
         if (!linkRepository.existsById(id)) {
-            throw new RuntimeException("Link does not exist.");
+            throw new LinkNotFoundException("Link does not exist.");
         }
         return clickEventRepository.getDailyClicks(id);
     }
 
     @Transactional
     public boolean updateLinkUrl(Long id, String newUrl) {
-        Link link= linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exists."));
+        Link link= linkRepository.findById(id).orElseThrow(()-> new LinkNotFoundException("Link does not exists."));
         String key= "link:"+link.getShortCode();
         link.setOriginalUrl(newUrl);
         redisTemplate.opsForValue().set(key,newUrl);
-        if(link.getOriginalUrl()==newUrl)
-            return true;
-        else
-            return false;
+        return true;
     }
 
     @Transactional
     public boolean updateLinkExpiry(Long id, LocalDateTime expiresAt) {
-        Link link=linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exists."));
+        Link link=linkRepository.findById(id).orElseThrow(()-> new LinkNotFoundException("Link does not exists."));
         link.setExpiresAt(expiresAt);
-        if(link.getExpiresAt()==expiresAt)
-            return true;
-        else
-            return false;
+        return true;
     }
 
     @Transactional
     public boolean updateLinkStatus(Long id, LinkStatus status) {
-        Link link=linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exists."));
+        Link link=linkRepository.findById(id).orElseThrow(()-> new LinkNotFoundException("Link does not exists."));
         link.setStatus(status);
-        if(link.getStatus()==status)
-            return true;
-        else
-            return false;
+        return true;
     }
 
     @Transactional
     public boolean deleteLink(Long id) {
-        Link link=linkRepository.findById(id).orElseThrow(()-> new RuntimeException("Link does not exist."));
+        Link link=linkRepository.findById(id).orElseThrow(()-> new LinkNotFoundException("Link does not exist."));
         String key="link:"+link.getShortCode();
         redisTemplate.delete(key);
         linkRepository.deleteById(id);

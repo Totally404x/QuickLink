@@ -20,22 +20,24 @@ import java.util.List;
 public class LinkController {
     private final LinkService linkService;
     private final ResponseMapper responseMapper;
+    private final LinkRequestDTO linkRequestDTO;
 
-    public LinkController(LinkService linkService, ResponseMapper responseMapper) {
+    public LinkController(LinkService linkService, ResponseMapper responseMapper, LinkRequestDTO linkRequestDTO) {
         this.linkService=linkService;
         this.responseMapper=responseMapper;
+        this.linkRequestDTO=linkRequestDTO;
     }
 
     @PostMapping
     public ResponseEntity<String> createLink(@RequestBody LinkRequestDTO requestDTO) {
-        Link link= linkService.createLink(requestDTO.getOriginalUrl(), requestDTO.getExpiresAt(), requestDTO.getOneTime(), requestDTO.getMaxClick());
+        Link link= linkService.createLink(requestDTO.getOriginalUrl(), requestDTO.getCustomAlias(), requestDTO.getScheduledAt(), requestDTO.getExpiresAt(), requestDTO.getPassword(), requestDTO.getOneTime(), requestDTO.getMaxClick());
         LinkResponseDTO responseDTO=responseMapper.toResponse(link);
         return ResponseEntity.ok("Link created: \n");
     }
 
     @GetMapping("/{shortCode}")
-    public ResponseEntity<Void> redirect(@PathVariable String shortCode) {
-        String originalUrl= linkService.getOriginalUrl(shortCode);
+    public ResponseEntity<Void> redirect(@PathVariable String shortCode, @RequestBody LinkRequestDTO requestDTO) {
+        String originalUrl= linkService.getOriginalUrl(shortCode, requestDTO.getPassword());
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(originalUrl)).build();
     }
 
@@ -62,7 +64,7 @@ public class LinkController {
 
     @GetMapping("/{id}/analytics")
     public ResponseEntity<LinkAnalyticsDTO> getLinkAnalytics(@PathVariable Long id) {
-        LinkAnalyticsDTO analyticsDTO= linkService.getlinkAnalytics(id);
+        LinkAnalyticsDTO analyticsDTO= linkService.getLinkAnalytics(id);
         return ResponseEntity.ok(analyticsDTO);
     }
 
